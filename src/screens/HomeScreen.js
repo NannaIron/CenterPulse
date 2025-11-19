@@ -12,7 +12,7 @@ export default function HomeScreen() {
   const [plannedSeconds, setPlannedSeconds] = useState(25 * 60);
   const [remaining, setRemaining] = useState(plannedSeconds);
   const [running, setRunning] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
+  const [focusedSeconds, setFocusedSeconds] = useState(0); 
   const intervalRef = useRef(null);
   const [todayTotalSeconds, setTodayTotalSeconds] = useState(0);
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -29,9 +29,18 @@ export default function HomeScreen() {
       if (active) {
         activeRef.current = active;
         setPlannedSeconds(active.plannedSeconds || plannedSeconds);
-        const rem = Math.max(0, Math.ceil((active.endTime - Date.now()) / 1000));
-        setRemaining(rem);
-        setRunning(rem > 0);
+
+        if (active.paused) {
+          const rem = typeof active.remaining === 'number' ? active.remaining : Math.max(0, Math.ceil((active.endTime - Date.now()) / 1000));
+          setRemaining(rem);
+          setRunning(false);
+          setFocusedSeconds(Math.max(0, (active.plannedSeconds || plannedSeconds) - rem));
+        } else {
+          const rem = Math.max(0, Math.ceil((active.endTime - Date.now()) / 1000));
+          setRemaining(rem);
+          setRunning(rem > 0);
+          setFocusedSeconds((active.plannedSeconds || plannedSeconds) - rem);
+        }
       }
       computeTodayTotal();
     })();
@@ -41,10 +50,20 @@ export default function HomeScreen() {
     const sub = AppState.addEventListener('change', (next) => {
       if (appState.current.match(/inactive|background/) && next === 'active') {
         if (activeRef.current) {
-          const rem = Math.max(0, Math.ceil((activeRef.current.endTime - Date.now()) / 1000));
-          setRemaining(rem);
-          if (rem === 0) {
-            finishSession();
+          if (activeRef.current.paused) {
+            const rem = typeof activeRef.current.remaining === 'number' ? activeRef.current.remaining : Math.max(0, Math.ceil((activeRef.current.endTime - Date.now()) / 1000));
+            setRemaining(rem);
+            setRunning(false);
+            setFocusedSeconds((activeRef.current.plannedSeconds || plannedSeconds) - rem);
+          } else {
+            const rem = Math.max(0, Math.ceil((activeRef.current.endTime - Date.now()) / 1000));
+            setRemaining(rem);
+            if (rem === 0) {
+              finishSession();
+            } else {
+              setRunning(true);
+              setFocusedSeconds((activeRef.current.plannedSeconds || plannedSeconds) - rem);
+            }
           }
         }
       }
@@ -54,11 +73,11 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (running && activeRef.current) {
+    if (running && activeRef.current && !activeRef.current.paused) {
       intervalRef.current = setInterval(() => {
         const rem = Math.max(0, Math.ceil((activeRef.current.endTime - Date.now()) / 1000));
         setRemaining(rem);
-        setElapsed(prev => prev + 1);
+        setFocusedSeconds(prev => prev + 1);
         if (rem <= 0) {
           finishSession();
         }
@@ -69,42 +88,46 @@ export default function HomeScreen() {
     return () => clearInterval(intervalRef.current);
   }, [running]);
 
-  async function startSession() {
+  async function handleStartPress() {
+    if (activeRef.current && activeRef.current.paused) {
+      const rem = typeof activeRef.current.remaining === 'number' ? activeRef.current.remaining : Math.max(0, Math.ceil((activeRef.current.endTime - Date.now()) / 1000));
+      const newEnd = Date.now() + rem * 1000;
+      activeRef.current.endTime = newEnd;
+      activeRef.current.paused = false;
+      delete activeRef.current.remaining;
+      await saveActiveSession(activeRef.current);
+      setRemaining(rem);
+      setRunning(true);
+      return;
+    }
+
     const id = createId();
     const startTime = Date.now();
     const endTime = startTime + plannedSeconds * 1000;
-    const active = { id, startTime, plannedSeconds, endTime };
+    const active = { id, startTime, plannedSeconds, endTime, pauseCount: 0, paused: false };
     activeRef.current = active;
-    await saveActiveSession(active); 
+    await saveActiveSession(active);
     setRemaining(Math.max(0, Math.ceil((endTime - Date.now()) / 1000)));
-    setElapsed(0);
+    setFocusedSeconds(0);
     setRunning(true);
   }
 
-  async function finishSession() {
-    clearInterval(intervalRef.current);
+  async function handlePausePress() {
+    if (!activeRef.current || activeRef.current.paused) return;
+    const rem = Math.max(0, Math.ceil((activeRef.current.endTime - Date.now()) / 1000));
+    activeRef.current.remaining = rem;
+    activeRef.current.paused = true;
+    activeRef.current.pauseCount = (activeRef.current.pauseCount || 0) + 1;
+    await saveActiveSession(activeRef.current);
+    setRemaining(rem);
     setRunning(false);
-    const actualSeconds = Math.round(elapsed + (plannedSeconds - remaining));
-    const session = {
-      id: activeRef.current?.id || createId(),
-      date: new Date().toISOString().slice(0,10),
-      startTime: activeRef.current?.startTime || Date.now() - actualSeconds * 1000,
-      plannedMinutes: Math.round(plannedSeconds / 60),
-      actualMinutes: Math.round(actualSeconds / 60),
-      completed: remaining === 0,
-    };
-    await saveSession(session); 
-    await clearActiveSession();
-    activeRef.current = null;
-    setElapsed(0);
-    setRemaining(plannedSeconds);
-    computeTodayTotal();
   }
 
-  async function stopSession() {
+  async function handleStopPress() {
     clearInterval(intervalRef.current);
     setRunning(false);
-    const actualSeconds = elapsed;
+
+    const actualSeconds = focusedSeconds;
     const session = {
       id: activeRef.current?.id || createId(),
       date: new Date().toISOString().slice(0,10),
@@ -112,11 +135,34 @@ export default function HomeScreen() {
       plannedMinutes: Math.round(plannedSeconds / 60),
       actualMinutes: Math.round(actualSeconds / 60),
       completed: false,
+      pauseCount: activeRef.current?.pauseCount || 0,
     };
     await saveSession(session);
     await clearActiveSession();
     activeRef.current = null;
-    setElapsed(0);
+    setFocusedSeconds(0);
+    setRemaining(plannedSeconds);
+    computeTodayTotal();
+  }
+
+  async function finishSession() {
+    clearInterval(intervalRef.current);
+    setRunning(false);
+
+    const actualSeconds = focusedSeconds;
+    const session = {
+      id: activeRef.current?.id || createId(),
+      date: new Date().toISOString().slice(0,10),
+      startTime: activeRef.current?.startTime || Date.now() - actualSeconds * 1000,
+      plannedMinutes: Math.round(plannedSeconds / 60),
+      actualMinutes: Math.round(actualSeconds / 60),
+      completed: remaining === 0,
+      pauseCount: activeRef.current?.pauseCount || 0,
+    };
+    await saveSession(session);
+    await clearActiveSession();
+    activeRef.current = null;
+    setFocusedSeconds(0);
     setRemaining(plannedSeconds);
     computeTodayTotal();
   }
@@ -153,17 +199,15 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.controls}>
-        {!running ? (
-          <TouchableOpacity style={styles.start} onPress={startSession}>
-            <Text style={styles.startText} onPress={() => setRunning(true)}>INICIAR</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.pause} onPress={() => setRunning(false)}>
-            <Text style={styles.pauseText}>PAUSAR</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity style={styles.start} onPress={handleStartPress}>
+          <Text style={styles.startText}>INICIO</Text>
+        </TouchableOpacity>
 
-        <TouchableOpacity style={styles.stop} onPress={stopSession}>
+        <TouchableOpacity style={styles.pause} onPress={handlePausePress}>
+          <Text style={styles.pauseText}>PAUSAR</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.stop} onPress={handleStopPress}>
           <Text style={styles.stopText}>PARAR</Text>
         </TouchableOpacity>
       </View>
@@ -188,9 +232,9 @@ const styles = StyleSheet.create({
   quickBtn: { padding: 8, margin: 6, backgroundColor: '#1E293B', borderRadius: 8 },
   quickText: { color: '#F8FAFC' },
   controls: { flexDirection: 'row', marginTop: 18 },
-  start: { backgroundColor: '#7C3AED', padding: 14, borderRadius: 40, marginRight: 12 },
+  start: { backgroundColor: '#7C3AED', padding: 14, borderRadius: 40, marginRight: 8 },
   startText: { color: '#fff', fontWeight: '700' },
-  pause: { backgroundColor: '#2563EB', padding: 14, borderRadius: 40, marginRight: 12 },
+  pause: { backgroundColor: '#2563EB', padding: 14, borderRadius: 40, marginRight: 8 },
   pauseText: { color: '#fff', fontWeight: '700' },
   stop: { backgroundColor: '#EF4444', padding: 14, borderRadius: 40 },
   stopText: { color: '#fff', fontWeight: '700' },

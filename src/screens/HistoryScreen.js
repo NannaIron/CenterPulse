@@ -33,8 +33,10 @@ export default function HistoryScreen() {
         keyExtractor={(i) => i.id}
         renderItem={({ item }) => (
           <View style={styles.item}>
-            <Text style={styles.itemText}>{item.date} • {item.plannedMinutes}min • {item.completed ? 'Concluída ✅' : 'Abandonada ❌'}</Text>
-            <Text style={styles.subText}>Real: {item.actualMinutes} min</Text>
+            <Text style={styles.itemText}>
+              {item.date} • {item.plannedMinutes}min • {item.completed ? 'Concluída ✅' : 'Abandonada ❌'}
+            </Text>
+            <Text style={styles.subText}>Real: {item.actualMinutes} min • Pausas: {item.pauseCount || 0}</Text>
           </View>
         )}
         ListEmptyComponent={<Text style={styles.empty}>Nenhuma sessão ainda</Text>}
