@@ -1,56 +1,62 @@
-import React, { useEffect, useState } from 'react';
-import { SafeAreaView, Text, Button, StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const STORAGE_KEY = '@centerpulse/demo';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import * as NavigationBar from 'expo-navigation-bar';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import HomeScreen from './src/screens/HomeScreen';
+import StatsScreen from './src/screens/StatsScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
 
 export default function App() {
-  const [data, setData] = useState(null);
+  const [route, setRoute] = useState('home');
 
   useEffect(() => {
-    loadData();
+    if (Platform.OS === 'android') {
+      NavigationBar.setVisibilityAsync('hidden').catch(()=>{});
+    }
+    return () => {
+      if (Platform.OS === 'android') {
+        NavigationBar.setVisibilityAsync('visible').catch(()=>{});
+      }
+    };
   }, []);
 
-  async function saveData() {
-    try {
-      const payload = { ts: Date.now() };
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-      setData(payload);
-    } catch (e) {
-      console.warn('saveData error', e);
-    }
-  }
-
-  async function loadData() {
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      setData(raw ? JSON.parse(raw) : null);
-    } catch (e) {
-      console.warn('loadData error', e);
-    }
-  }
-
-  async function clearData() {
-    try {
-      await AsyncStorage.removeItem(STORAGE_KEY);
-      setData(null);
-    } catch (e) {
-      console.warn('clearData error', e);
-    }
-  }
-
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>CenterPulse (demo)</Text>
-      <Text>Dados armazenados: {data ? JSON.stringify(data) : '—'}</Text>
-      <Button title="Salvar agora" onPress={saveData} />
-      <Button title="Carregar" onPress={loadData} />
-      <Button title="Limpar" onPress={clearData} />
-    </SafeAreaView>
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container}>
+        <StatusBar hidden />
+        <View style={styles.header}>
+          <Text style={styles.title}>CenterPulse</Text>
+        </View>
+
+        <View style={styles.content}>
+          {route === 'home' && <HomeScreen />}
+          {route === 'stats' && <StatsScreen />}
+          {route === 'history' && <HistoryScreen />}
+        </View>
+
+        <View style={styles.tabbar}>
+          <TouchableOpacity style={styles.tab} onPress={() => setRoute('stats')}>
+            <Text style={styles.tabText}>Estatísticas</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => setRoute('home')}>
+            <Text style={styles.tabText}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => setRoute('history')}>
+            <Text style={styles.tabText}>Histórico</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
-  title: { fontSize: 18, marginBottom: 12 },
+  container: { flex: 1, backgroundColor: '#0F172A' },
+  header: { padding: 16, alignItems: 'center' },
+  title: { color: '#F8FAFC', fontSize: 20, fontWeight: '600', marginTop: 10 },
+  content: { flex: 1 },
+  tabbar: { flexDirection: 'row', height: 64, borderTopWidth: 1, borderTopColor: '#1E293B' },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tabText: { color: '#94A3B8' },
 });
