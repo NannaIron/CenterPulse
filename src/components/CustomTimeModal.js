@@ -1,20 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 
-export default function CustomTimeModal({ visible, onClose, onSave, initialMinutes = 25 }) {
-  const [minutes, setMinutes] = useState(String(initialMinutes));
+export default function CustomTimeModal({ visible, onClose, onSave, initialSeconds = 1500 }) {
+  const format = (s) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${String(sec).padStart(2, '0')}`;
+  };
+
+  const [text, setText] = useState(format(initialSeconds));
 
   useEffect(() => {
-    setMinutes(String(initialMinutes));
-  }, [initialMinutes, visible]);
+    setText(format(initialSeconds));
+  }, [initialSeconds, visible]);
+
+  function sanitizeInput(value) {
+    let v = value.replace(/[^0-9:]/g, '');
+    const parts = v.split(':');
+    if (parts.length > 2) {
+      v = parts[0] + ':' + parts.slice(1).join('');
+    }
+    if (v.length > 7) v = v.slice(0,7);
+    return v;
+  }
+
+  function handleChange(value) {
+    setText(sanitizeInput(value));
+  }
 
   function handleSave() {
-    const n = parseInt(minutes, 10);
-    if (!isNaN(n) && n > 0) {
-      onSave(n);
+    const v = text.trim();
+    if (v.includes(':')) {
+      const [mRaw, sRaw] = v.split(':');
+      const m = parseInt(mRaw || '0', 10);
+      let s = parseInt((sRaw || '0').padEnd(2, '0'), 10);
+      if (isNaN(m) || isNaN(s) || s < 0 || m < 0) {
+        onClose();
+        return;
+      }
+      if (s >= 60) {
+        const extraM = Math.floor(s / 60);
+        s = s % 60;
+        const totalSeconds = (m + extraM) * 60 + s;
+        onSave(totalSeconds);
+      } else {
+        onSave(m * 60 + s);
+      }
       onClose();
     } else {
-      setMinutes(String(initialMinutes));
+      const m = parseInt(v || '0', 10);
+      if (isNaN(m) || m <= 0) {
+        onClose();
+        return;
+      }
+      onSave(m * 60);
       onClose();
     }
   }
@@ -23,15 +62,16 @@ export default function CustomTimeModal({ visible, onClose, onSave, initialMinut
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.center}>
         <View style={styles.card}>
-          <Text style={styles.title}>Tempo customizado (min)</Text>
+          <Text style={styles.title}>Tempo customizado (M:SS)</Text>
           <TextInput
-            keyboardType="number-pad"
-            value={minutes}
-            onChangeText={setMinutes}
+            keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
+            value={text}
+            onChangeText={handleChange}
             style={styles.input}
-            placeholder="Ex: 30"
+            placeholder="Ex: 1:50"
             placeholderTextColor="#94A3B8"
             returnKeyType="done"
+            maxLength={7}
           />
           <View style={styles.row}>
             <TouchableOpacity style={[styles.btn, styles.cancel]} onPress={onClose}>

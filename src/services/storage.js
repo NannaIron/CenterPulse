@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SESSIONS_KEY = '@CenterPulse:sessions';
 const SETTINGS_KEY = '@CenterPulse:settings';
+const ACTIVE_KEY = '@CenterPulse:active';
 
 export async function getSessions() {
   try {
@@ -51,6 +52,36 @@ export async function saveSettings(settings) {
     return true;
   } catch (e) {
     console.warn('saveSettings error', e);
+    return false;
+  }
+}
+
+export async function saveActiveSession(active) {
+  try {
+    await AsyncStorage.setItem(ACTIVE_KEY, JSON.stringify(active));
+    return true;
+  } catch (e) {
+    console.warn('saveActiveSession error', e);
+    return false;
+  }
+}
+
+export async function getActiveSession() {
+  try {
+    const raw = await AsyncStorage.getItem(ACTIVE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.warn('getActiveSession error', e);
+    return null;
+  }
+}
+
+export async function clearActiveSession() {
+  try {
+    await AsyncStorage.removeItem(ACTIVE_KEY);
+    return true;
+  } catch (e) {
+    console.warn('clearActiveSession error', e);
     return false;
   }
 }

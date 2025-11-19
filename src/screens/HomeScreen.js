@@ -1,41 +1,67 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, AppState } from 'react-native';
 import TimerCircle from '../components/TimerCircle';
 import CustomTimeModal from '../components/CustomTimeModal';
-import { saveSession, getSessions } from '../services/storage';
+import { saveSession, getSessions, saveActiveSession, getActiveSession, clearActiveSession } from '../services/storage';
 
 function createId() {
   return `${Date.now()}-${Math.floor(Math.random()*10000)}`;
 }
 
 export default function HomeScreen() {
-  const [minutesPlanned, setMinutesPlanned] = useState(25);
-  const [remaining, setRemaining] = useState(minutesPlanned * 60);
+  const [plannedSeconds, setPlannedSeconds] = useState(25 * 60);
+  const [remaining, setRemaining] = useState(plannedSeconds);
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef(null);
   const [todayTotalSeconds, setTodayTotalSeconds] = useState(0);
   const [showCustomModal, setShowCustomModal] = useState(false);
+  const activeRef = useRef(null);
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
-    setRemaining(minutesPlanned * 60);
-  }, [minutesPlanned]);
+    setRemaining(plannedSeconds);
+  }, [plannedSeconds]);
 
   useEffect(() => {
-    computeTodayTotal();
+    (async () => {
+      const active = await getActiveSession();
+      if (active) {
+        activeRef.current = active;
+        setPlannedSeconds(active.plannedSeconds || plannedSeconds);
+        const rem = Math.max(0, Math.ceil((active.endTime - Date.now()) / 1000));
+        setRemaining(rem);
+        setRunning(rem > 0);
+      }
+      computeTodayTotal();
+    })();
   }, []);
 
   useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => {
-        setRemaining(r => {
-          if (r <= 1) {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (appState.current.match(/inactive|background/) && next === 'active') {
+        if (activeRef.current) {
+          const rem = Math.max(0, Math.ceil((activeRef.current.endTime - Date.now()) / 1000));
+          setRemaining(rem);
+          if (rem === 0) {
             finishSession();
-            return 0;
           }
-          setElapsed(e => e + 1);
-          return r - 1;
-        });
+        }
+      }
+      appState.current = next;
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (running && activeRef.current) {
+      intervalRef.current = setInterval(() => {
+        const rem = Math.max(0, Math.ceil((activeRef.current.endTime - Date.now()) / 1000));
+        setRemaining(rem);
+        setElapsed(prev => prev + 1);
+        if (rem <= 0) {
+          finishSession();
+        }
       }, 1000);
     } else {
       clearInterval(intervalRef.current);
@@ -43,25 +69,35 @@ export default function HomeScreen() {
     return () => clearInterval(intervalRef.current);
   }, [running]);
 
-  function startSession() {
+  async function startSession() {
+    const id = createId();
+    const startTime = Date.now();
+    const endTime = startTime + plannedSeconds * 1000;
+    const active = { id, startTime, plannedSeconds, endTime };
+    activeRef.current = active;
+    await saveActiveSession(active); 
+    setRemaining(Math.max(0, Math.ceil((endTime - Date.now()) / 1000)));
+    setElapsed(0);
     setRunning(true);
   }
 
   async function finishSession() {
     clearInterval(intervalRef.current);
     setRunning(false);
-    const actualSeconds = Math.round(elapsed + (minutesPlanned * 60 - remaining));
+    const actualSeconds = Math.round(elapsed + (plannedSeconds - remaining));
     const session = {
-      id: createId(),
+      id: activeRef.current?.id || createId(),
       date: new Date().toISOString().slice(0,10),
-      startTime: Date.now() - actualSeconds * 1000,
-      plannedMinutes: minutesPlanned,
+      startTime: activeRef.current?.startTime || Date.now() - actualSeconds * 1000,
+      plannedMinutes: Math.round(plannedSeconds / 60),
       actualMinutes: Math.round(actualSeconds / 60),
       completed: remaining === 0,
     };
     await saveSession(session); 
+    await clearActiveSession();
+    activeRef.current = null;
     setElapsed(0);
-    setRemaining(minutesPlanned * 60);
+    setRemaining(plannedSeconds);
     computeTodayTotal();
   }
 
@@ -70,16 +106,18 @@ export default function HomeScreen() {
     setRunning(false);
     const actualSeconds = elapsed;
     const session = {
-      id: createId(),
+      id: activeRef.current?.id || createId(),
       date: new Date().toISOString().slice(0,10),
-      startTime: Date.now() - actualSeconds * 1000,
-      plannedMinutes: minutesPlanned,
+      startTime: activeRef.current?.startTime || Date.now() - actualSeconds * 1000,
+      plannedMinutes: Math.round(plannedSeconds / 60),
       actualMinutes: Math.round(actualSeconds / 60),
       completed: false,
     };
     await saveSession(session);
+    await clearActiveSession();
+    activeRef.current = null;
     setElapsed(0);
-    setRemaining(minutesPlanned * 60);
+    setRemaining(plannedSeconds);
     computeTodayTotal();
   }
 
@@ -92,22 +130,22 @@ export default function HomeScreen() {
     setTodayTotalSeconds(seconds);
   }
 
-  const displayMin = Math.floor((remaining) / 60);
+  const displayMin = Math.floor(remaining / 60);
   const displaySec = remaining % 60;
 
-  function handleCustomSave(newMinutes) {
-    setMinutesPlanned(newMinutes);
+  function handleCustomSave(newSeconds) {
+    setPlannedSeconds(newSeconds);
   }
 
   return (
     <View style={styles.container}>
       <TimerCircle minutes={displayMin} seconds={displaySec} />
       <View style={styles.quick}>
-        <TouchableOpacity style={styles.quickBtn} onPress={() => setMinutesPlanned(25)}>
-          <Text style={styles.quickText}>25 min</Text>
+        <TouchableOpacity style={styles.quickBtn} onPress={() => setPlannedSeconds(25 * 60)}>
+          <Text style={styles.quickText}>25:00</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.quickBtn} onPress={() => setMinutesPlanned(50)}>
-          <Text style={styles.quickText}>50 min</Text>
+        <TouchableOpacity style={styles.quickBtn} onPress={() => setPlannedSeconds(50 * 60)}>
+          <Text style={styles.quickText}>50:00</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.quickBtn} onPress={() => setShowCustomModal(true)}>
           <Text style={styles.quickText}>Custom</Text>
@@ -138,7 +176,7 @@ export default function HomeScreen() {
         visible={showCustomModal}
         onClose={() => setShowCustomModal(false)}
         onSave={handleCustomSave}
-        initialMinutes={minutesPlanned}
+        initialSeconds={plannedSeconds}
       />
     </View>
   );
