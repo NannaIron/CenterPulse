@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import TimerCircle from '../components/TimerCircle';
+import CustomTimeModal from '../components/CustomTimeModal';
 import { saveSession, getSessions } from '../services/storage';
 
 function createId() {
@@ -14,6 +15,7 @@ export default function HomeScreen() {
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef(null);
   const [todayTotalSeconds, setTodayTotalSeconds] = useState(0);
+  const [showCustomModal, setShowCustomModal] = useState(false);
 
   useEffect(() => {
     setRemaining(minutesPlanned * 60);
@@ -93,6 +95,10 @@ export default function HomeScreen() {
   const displayMin = Math.floor((remaining) / 60);
   const displaySec = remaining % 60;
 
+  function handleCustomSave(newMinutes) {
+    setMinutesPlanned(newMinutes);
+  }
+
   return (
     <View style={styles.container}>
       <TimerCircle minutes={displayMin} seconds={displaySec} />
@@ -103,7 +109,7 @@ export default function HomeScreen() {
         <TouchableOpacity style={styles.quickBtn} onPress={() => setMinutesPlanned(50)}>
           <Text style={styles.quickText}>50 min</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.quickBtn} onPress={() => {}}>
+        <TouchableOpacity style={styles.quickBtn} onPress={() => setShowCustomModal(true)}>
           <Text style={styles.quickText}>Custom</Text>
         </TouchableOpacity>
       </View>
@@ -127,6 +133,13 @@ export default function HomeScreen() {
       <View style={styles.card}>
         <Text style={styles.cardText}>Sessões hoje (concluídas): {Math.floor(todayTotalSeconds/60)} min</Text>
       </View>
+
+      <CustomTimeModal
+        visible={showCustomModal}
+        onClose={() => setShowCustomModal(false)}
+        onSave={handleCustomSave}
+        initialMinutes={minutesPlanned}
+      />
     </View>
   );
 }
