@@ -40,6 +40,9 @@ export default function HomeScreen() {
           setRemaining(rem);
           setRunning(rem > 0);
           setFocusedSeconds((active.plannedSeconds || plannedSeconds) - rem);
+          if (rem === 0) {
+            finishSession(rem);
+          }
         }
       }
       computeTodayTotal();
@@ -59,7 +62,7 @@ export default function HomeScreen() {
             const rem = Math.max(0, Math.ceil((activeRef.current.endTime - Date.now()) / 1000));
             setRemaining(rem);
             if (rem === 0) {
-              finishSession();
+              finishSession(rem);
             } else {
               setRunning(true);
               setFocusedSeconds((activeRef.current.plannedSeconds || plannedSeconds) - rem);
@@ -79,7 +82,7 @@ export default function HomeScreen() {
         setRemaining(rem);
         setFocusedSeconds(prev => prev + 1);
         if (rem <= 0) {
-          finishSession();
+          finishSession(rem);
         }
       }, 1000);
     } else {
@@ -87,6 +90,27 @@ export default function HomeScreen() {
     }
     return () => clearInterval(intervalRef.current);
   }, [running]);
+
+  async function addTime(secondsToAdd) {
+    const currentPlanned = activeRef.current?.plannedSeconds ?? plannedSeconds;
+    const newPlanned = currentPlanned + secondsToAdd;
+    setPlannedSeconds(newPlanned);
+
+    setRemaining((r) => Math.max(0, r + secondsToAdd));
+
+    if (activeRef.current) {
+      if (activeRef.current.paused) {
+        const rem = typeof activeRef.current.remaining === 'number'
+          ? activeRef.current.remaining
+          : Math.max(0, Math.ceil((activeRef.current.endTime - Date.now()) / 1000));
+        activeRef.current.remaining = rem + secondsToAdd;
+      } else {
+        activeRef.current.endTime = (activeRef.current.endTime || Date.now()) + secondsToAdd * 1000;
+      }
+      activeRef.current.plannedSeconds = newPlanned;
+      await saveActiveSession(activeRef.current);
+    }
+  }
 
   async function handleStartPress() {
     if (activeRef.current && activeRef.current.paused) {
@@ -145,20 +169,27 @@ export default function HomeScreen() {
     computeTodayTotal();
   }
 
-  async function finishSession() {
+  async function finishSession(finalRemaining = null) {
     clearInterval(intervalRef.current);
     setRunning(false);
 
-    const actualSeconds = focusedSeconds;
+    const rem = typeof finalRemaining === 'number' ? finalRemaining : remaining;
+    const completed = rem === 0;
+
+    const actualSeconds = completed
+      ? (activeRef.current?.plannedSeconds ?? plannedSeconds)
+      : Math.round(focusedSeconds);
+
     const session = {
       id: activeRef.current?.id || createId(),
       date: new Date().toISOString().slice(0,10),
       startTime: activeRef.current?.startTime || Date.now() - actualSeconds * 1000,
-      plannedMinutes: Math.round(plannedSeconds / 60),
+      plannedMinutes: Math.round((activeRef.current?.plannedSeconds ?? plannedSeconds) / 60),
       actualMinutes: Math.round(actualSeconds / 60),
-      completed: remaining === 0,
+      completed,
       pauseCount: activeRef.current?.pauseCount || 0,
     };
+
     await saveSession(session);
     await clearActiveSession();
     activeRef.current = null;
@@ -187,11 +218,11 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <TimerCircle minutes={displayMin} seconds={displaySec} />
       <View style={styles.quick}>
-        <TouchableOpacity style={styles.quickBtn} onPress={() => setPlannedSeconds(25 * 60)}>
-          <Text style={styles.quickText}>25:00</Text>
+        <TouchableOpacity style={styles.quickBtn} onPress={() => addTime(30)}>
+          <Text style={styles.quickText}>+ 0:30</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.quickBtn} onPress={() => setPlannedSeconds(50 * 60)}>
-          <Text style={styles.quickText}>50:00</Text>
+        <TouchableOpacity style={styles.quickBtn} onPress={() => addTime(60)}>
+          <Text style={styles.quickText}>+ 1:00</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.quickBtn} onPress={() => setShowCustomModal(true)}>
           <Text style={styles.quickText}>Custom</Text>
