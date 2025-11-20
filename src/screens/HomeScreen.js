@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, AppState } from 'react-native';
+import { Ionicons } from '@expo/vector-icons'; // <--- adicionado
 import TimerCircle from '../components/TimerCircle';
 import CustomTimeModal from '../components/CustomTimeModal';
 import { saveSession, getSessions, saveActiveSession, getActiveSession, clearActiveSession } from '../services/storage';
@@ -238,20 +239,20 @@ export default function HomeScreen() {
 
       <View style={styles.controls}>
         <TouchableOpacity style={styles.start} onPress={handleStartPress}>
-          <Text style={styles.startText}>INICIO</Text>
+          <Ionicons name="play-circle-outline" size={40} color="#fff" />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.pause} onPress={handlePausePress}>
-          <Text style={styles.pauseText}>PAUSAR</Text>
+          <Ionicons name="pause-circle-outline" size={40} color="#fff" />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.stop} onPress={handleStopPress}>
-          <Text style={styles.stopText}>PARAR</Text>
+          <Ionicons name="stop-circle-outline" size={40} color="#fff" />
         </TouchableOpacity>
       </View>
-
+      
       <View style={styles.card}>
-        <Text style={styles.cardText}>Sessões hoje (concluídas): {Math.floor(todayTotalSeconds/60)} min</Text>
+        <Text style={styles.cardText}>Tempo total de foco diário: {Math.floor(todayTotalSeconds/60)} min</Text>
       </View>
 
       <CustomTimeModal

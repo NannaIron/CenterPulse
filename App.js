@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native
 import * as NavigationBar from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons'; // <--- adicionado
 import HomeScreen from './src/screens/HomeScreen';
 import StatsScreen from './src/screens/StatsScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
@@ -37,13 +38,13 @@ export default function App() {
 
         <View style={styles.tabbar}>
           <TouchableOpacity style={styles.tab} onPress={() => setRoute('stats')}>
-            <Text style={styles.tabText}>Estatísticas</Text>
+            <Ionicons name="bar-chart-outline" size={28} color="#94A3B8" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.tab} onPress={() => setRoute('home')}>
-            <Text style={styles.tabText}>Home</Text>
+            <Ionicons name="home-outline" size={28} color="#94A3B8" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.tab} onPress={() => setRoute('history')}>
-            <Text style={styles.tabText}>Histórico</Text>
+            <Ionicons name="time-outline" size={28} color="#94A3B8" />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
