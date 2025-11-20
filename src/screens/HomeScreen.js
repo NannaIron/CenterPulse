@@ -151,21 +151,28 @@ export default function HomeScreen() {
     clearInterval(intervalRef.current);
     setRunning(false);
 
+    const currentPlanned = activeRef.current?.plannedSeconds ?? plannedSeconds;
     const actualSeconds = focusedSeconds;
+
     const session = {
       id: activeRef.current?.id || createId(),
       date: new Date().toISOString().slice(0,10),
       startTime: activeRef.current?.startTime || Date.now() - actualSeconds * 1000,
-      plannedMinutes: Math.round(plannedSeconds / 60),
+      plannedMinutes: Math.round(currentPlanned / 60),
       actualMinutes: Math.round(actualSeconds / 60),
       completed: false,
       pauseCount: activeRef.current?.pauseCount || 0,
     };
+
     await saveSession(session);
     await clearActiveSession();
     activeRef.current = null;
+
+    const defaultSeconds = 25 * 60;
     setFocusedSeconds(0);
-    setRemaining(plannedSeconds);
+    setPlannedSeconds(defaultSeconds);
+    setRemaining(defaultSeconds);
+
     computeTodayTotal();
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   View,
@@ -13,64 +13,64 @@ import {
 } from 'react-native';
 
 export default function CustomTimeModal({ visible, onClose, onSave, initialSeconds = 1500 }) {
-  const format = (s) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${String(sec).padStart(2, '0')}`;
-  };
-
-  const [text, setText] = useState(format(initialSeconds));
+  const [digits, setDigits] = useState('0000');
+  const digitsRef = useRef(digits);
 
   useEffect(() => {
-    setText(format(initialSeconds));
-  }, [initialSeconds, visible]);
-
-  function sanitizeInput(value) {
-    let v = value.replace(/[^0-9:]/g, '');
-    const parts = v.split(':');
-    if (parts.length > 2) {
-      v = parts[0] + ':' + parts.slice(1).join('');
+    if (visible) {
+      setDigits('0000');
+      digitsRef.current = '0000';
     }
-    if (v.length > 7) v = v.slice(0,7);
-    return v;
+  }, [visible]);
+
+  function formatFromDigits(d) {
+    const padded = d.padStart(4, '0');
+    const mm = padded.slice(0,2);
+    const ss = padded.slice(2,4);
+    return `${mm}:${ss}`;
   }
 
-  function handleChange(value) {
-    setText(sanitizeInput(value));
+  function extractDigitsFromText(t) {
+    return (t.match(/\d/g) || []).join('').slice(0, 100);
+  }
+
+  function handleChangeText(text) {
+    const raw = extractDigitsFromText(text);
+    const last4 = raw.slice(-4).padStart(4, '0');
+    setDigits(last4);
+    digitsRef.current = last4;
+  }
+
+  function handleKeyPress({ nativeEvent }) {
+    const key = nativeEvent.key;
+    if (key === 'Backspace') {
+      setDigits(prev => {
+        const next = ('0' + prev.slice(0,3)).slice(0,4);
+        digitsRef.current = next;
+        return next;
+      });
+      return;
+    }
+    if (/^\d$/.test(key)) {
+      setDigits(prev => {
+        const next = (prev.slice(1) + key).slice(-4);
+        digitsRef.current = next;
+        return next;
+      });
+    }
   }
 
   function handleSave() {
-    const v = text.trim();
-    if (v.includes(':')) {
-      const [mRaw, sRaw] = v.split(':');
-      const m = parseInt(mRaw || '0', 10);
-      let s = parseInt((sRaw || '0').padEnd(2, '0'), 10);
-      if (isNaN(m) || isNaN(s) || s < 0 || m < 0) {
-        onClose();
-        return;
-      }
-      if (s >= 60) {
-        const extraM = Math.floor(s / 60);
-        s = s % 60;
-        const totalSeconds = (m + extraM) * 60 + s;
-        onSave(totalSeconds);
-      } else {
-        onSave(m * 60 + s);
-      }
-      onClose();
-    } else {
-      const m = parseInt(v || '0', 10);
-      if (isNaN(m) || m <= 0) {
-        onClose();
-        return;
-      }
-      onSave(m * 60);
-      onClose();
-    }
+    const padded = digitsRef.current.padStart(4, '0');
+    const mm = parseInt(padded.slice(0,2), 10);
+    const ss = parseInt(padded.slice(2,4), 10);
+    const totalSeconds = mm * 60 + ss;
+    onSave(totalSeconds);
+    onClose();
   }
 
   function handleOverlayPress() {
-    Keyboard.dismiss(); 
+    Keyboard.dismiss();
     onClose();
   }
 
@@ -81,19 +81,20 @@ export default function CustomTimeModal({ visible, onClose, onSave, initialSecon
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.center}
         >
-          {}
           <Pressable onPress={() => {}} style={styles.cardWrapper}>
             <View style={styles.card}>
-              <Text style={styles.title}>Tempo customizado (M:SS)</Text>
+              <Text style={styles.title}>Tempo customizado (MM:SS)</Text>
               <TextInput
                 keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-                value={text}
-                onChangeText={handleChange}
+                value={formatFromDigits(digits)}
+                onChangeText={handleChangeText}
+                onKeyPress={handleKeyPress}
                 style={styles.input}
-                placeholder="Ex: 1:50"
+                placeholder="00:00"
                 placeholderTextColor="#94A3B8"
                 returnKeyType="done"
-                maxLength={7}
+                maxLength={5}
+                caretHidden={true}
               />
               <View style={styles.row}>
                 <TouchableOpacity style={[styles.btn, styles.cancel]} onPress={onClose}>
