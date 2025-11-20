@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Pressable,
+  Keyboard,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform
+} from 'react-native';
 
 export default function CustomTimeModal({ visible, onClose, onSave, initialSeconds = 1500 }) {
   const format = (s) => {
@@ -58,37 +69,52 @@ export default function CustomTimeModal({ visible, onClose, onSave, initialSecon
     }
   }
 
+  function handleOverlayPress() {
+    Keyboard.dismiss(); 
+    onClose();
+  }
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.center}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Tempo customizado (M:SS)</Text>
-          <TextInput
-            keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-            value={text}
-            onChangeText={handleChange}
-            style={styles.input}
-            placeholder="Ex: 1:50"
-            placeholderTextColor="#94A3B8"
-            returnKeyType="done"
-            maxLength={7}
-          />
-          <View style={styles.row}>
-            <TouchableOpacity style={[styles.btn, styles.cancel]} onPress={onClose}>
-              <Text style={styles.btnText}>Cancelar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.btn, styles.save]} onPress={handleSave}>
-              <Text style={styles.btnText}>Salvar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
+      <Pressable style={styles.overlay} onPress={handleOverlayPress}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.center}
+        >
+          {}
+          <Pressable onPress={() => {}} style={styles.cardWrapper}>
+            <View style={styles.card}>
+              <Text style={styles.title}>Tempo customizado (M:SS)</Text>
+              <TextInput
+                keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
+                value={text}
+                onChangeText={handleChange}
+                style={styles.input}
+                placeholder="Ex: 1:50"
+                placeholderTextColor="#94A3B8"
+                returnKeyType="done"
+                maxLength={7}
+              />
+              <View style={styles.row}>
+                <TouchableOpacity style={[styles.btn, styles.cancel]} onPress={onClose}>
+                  <Text style={styles.btnText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.btn, styles.save]} onPress={handleSave}>
+                  <Text style={styles.btnText}>Salvar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  cardWrapper: { width: '100%', alignItems: 'center' },
   card: { width: '85%', backgroundColor: '#0B1220', padding: 18, borderRadius: 12, alignItems: 'center' },
   title: { color: '#F8FAFC', fontSize: 16, marginBottom: 12 },
   input: {
